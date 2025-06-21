@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Masaniello 2/10 Objective:WIN Exact</title>
+  <title>Masaniello 2/10 (Memoized Recursion)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     body { font-family: Arial, sans-serif; padding: 16px; text-align: center; }
@@ -18,7 +18,7 @@
   </style>
 </head>
 <body>
-  <h2>Masaniello 2/10 (True Recursion)</h2>
+  <h2>Masaniello 2/10 (Memoized)</h2>
   <div class="inputs flex">
     <div>
       <label>Starting Balance: $</label>
@@ -54,25 +54,24 @@
     let profitSoFar = 0;
     let riskAmount = 100;
 
-    // True recursive Masaniello: finds the stake needed at this state to guarantee recovery on any win path
+    // --- MASANIELLO TRUE RECURSION, MEMOIZED ---
+    const memo = {};
+    function memoKey(riskLeft, tradesLeft, winsLeft) {
+      // Discretize to cents for performance
+      return [Math.round(riskLeft*100)/100, tradesLeft, winsLeft].join("_");
+    }
+
     function recursiveStake(riskLeft, tradesLeft, winsLeft, payout) {
       if (winsLeft === 0) return 0;
       if (tradesLeft === 0 || winsLeft > tradesLeft) return 0;
-      // If you must win every trade left
       if (winsLeft === tradesLeft) return riskLeft / (payout ** winsLeft);
 
-      // Recursively compute the next stake
-      // stake = (futureStakeIfWin * payout + futureStakeIfLoss) / (payout + 1)
-      // where:
-      // - futureStakeIfWin  = recursiveStake(riskLeft - stake * (payout - 1), tradesLeft - 1, winsLeft - 1, payout)
-      // - futureStakeIfLoss = recursiveStake(riskLeft + stake, tradesLeft - 1, winsLeft, payout)
-      // This requires solving for stake:
-      // stake = (payout * recursiveStake(riskLeft - stake * (payout - 1), tradesLeft - 1, winsLeft - 1, payout)
-      //        + recursiveStake(riskLeft + stake, tradesLeft - 1, winsLeft, payout)) / (payout + 1)
+      const key = memoKey(riskLeft, tradesLeft, winsLeft);
+      if (memo.hasOwnProperty(key)) return memo[key];
 
-      // We'll solve this with a numeric root finder (bisection method)
-      let lo = 0, hi = Math.max(riskLeft, 1e-6) + 1000, guess, f, count = 0;
-      while (hi - lo > 1e-6 && count < 100) {
+      // Bisection numeric solve
+      let lo = 0, hi = Math.max(Math.abs(riskLeft), 1e-8) + 1000, guess, f, count = 0;
+      while (hi - lo > 1e-5 && count < 30) {
         guess = (lo + hi) / 2;
         let futureWin = recursiveStake(riskLeft - guess * (payout - 1), tradesLeft - 1, winsLeft - 1, payout);
         let futureLoss = recursiveStake(riskLeft + guess, tradesLeft - 1, winsLeft, payout);
@@ -81,7 +80,8 @@
         else hi = guess;
         count++;
       }
-      return +(guess).toFixed(2);
+      memo[key] = +(guess).toFixed(2);
+      return memo[key];
     }
 
     function getNextStake() {
@@ -89,8 +89,7 @@
       let winsLeft = targetWins - wins;
       if (winsLeft <= 0 || tradesLeft <= 0) return 0;
       let amountToRecover = riskAmount - profitSoFar;
-      let stake = recursiveStake(amountToRecover, tradesLeft, winsLeft, payout);
-      return Math.max(0, +stake.toFixed(2));
+      return Math.max(0, +recursiveStake(amountToRecover, tradesLeft, winsLeft, payout));
     }
 
     function updateDisplay() {
@@ -141,6 +140,8 @@
       tradeNumber = 1;
       profitSoFar = 0;
       riskAmount = totalBalance * (riskPct / 100);
+      // clear cache for new cycle
+      for (let key in memo) { delete memo[key]; }
     }
 
     function resetAll(applyNewSettings) {
