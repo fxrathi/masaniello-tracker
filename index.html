@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Masaniello 2/10 True Recursion</title>
+  <title>Masaniello 2/10 Objective:WIN Exact</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     body { font-family: Arial, sans-serif; padding: 16px; text-align: center; }
@@ -18,7 +18,7 @@
   </style>
 </head>
 <body>
-  <h2>Masaniello 2/10 (True Recursive)</h2>
+  <h2>Masaniello 2/10 (True Recursion)</h2>
   <div class="inputs flex">
     <div>
       <label>Starting Balance: $</label>
@@ -40,12 +40,10 @@
   <button class="reset" onclick="resetAll(false)">🔄 RESET TRACKER</button>
 
   <script>
-    // --- CONFIG ---
     const tradesPerCycle = 10;
     const targetWins = 2;
     const payout = 1.85;
 
-    // --- STATE ---
     let totalBalance = 500;
     let riskPct = 20;
     let cycle = 1;
@@ -56,43 +54,42 @@
     let profitSoFar = 0;
     let riskAmount = 100;
 
-    // --- BINOMIAL COEFFICIENT ---
-    function binomial(n, k) {
-      if (k < 0 || k > n) return 0;
-      let res = 1;
-      for (let i = 1; i <= k; i++) {
-        res *= (n - (k - i));
-        res /= i;
-      }
-      return res;
-    }
+    // True recursive Masaniello: finds the stake needed at this state to guarantee recovery on any win path
+    function recursiveStake(riskLeft, tradesLeft, winsLeft, payout) {
+      if (winsLeft === 0) return 0;
+      if (tradesLeft === 0 || winsLeft > tradesLeft) return 0;
+      // If you must win every trade left
+      if (winsLeft === tradesLeft) return riskLeft / (payout ** winsLeft);
 
-    // --- TRUE MASANIELLO NEXT STAKE (RECURSIVE) ---
-    function masanielloNextStake(riskLeft, tradesLeft, winsLeft, payout) {
-      if (winsLeft === 0 || tradesLeft === 0) return 0;
-      if (winsLeft > tradesLeft) return 0;
-      if (winsLeft === tradesLeft) {
-        // Must win all remaining
-        return riskLeft / (payout ** winsLeft);
+      // Recursively compute the next stake
+      // stake = (futureStakeIfWin * payout + futureStakeIfLoss) / (payout + 1)
+      // where:
+      // - futureStakeIfWin  = recursiveStake(riskLeft - stake * (payout - 1), tradesLeft - 1, winsLeft - 1, payout)
+      // - futureStakeIfLoss = recursiveStake(riskLeft + stake, tradesLeft - 1, winsLeft, payout)
+      // This requires solving for stake:
+      // stake = (payout * recursiveStake(riskLeft - stake * (payout - 1), tradesLeft - 1, winsLeft - 1, payout)
+      //        + recursiveStake(riskLeft + stake, tradesLeft - 1, winsLeft, payout)) / (payout + 1)
+
+      // We'll solve this with a numeric root finder (bisection method)
+      let lo = 0, hi = Math.max(riskLeft, 1e-6) + 1000, guess, f, count = 0;
+      while (hi - lo > 1e-6 && count < 100) {
+        guess = (lo + hi) / 2;
+        let futureWin = recursiveStake(riskLeft - guess * (payout - 1), tradesLeft - 1, winsLeft - 1, payout);
+        let futureLoss = recursiveStake(riskLeft + guess, tradesLeft - 1, winsLeft, payout);
+        f = (payout * futureWin + futureLoss) / (payout + 1) - guess;
+        if (f > 0) lo = guess;
+        else hi = guess;
+        count++;
       }
-      // Backward induction:
-      // Find the next stake so that: if win, future solves with (riskLeft - stake*(payout-1)), if loss, future solves with (riskLeft + stake)
-      // Solve: stake = riskLeft / [payout * binomial(tradesLeft - 1, winsLeft - 1) + binomial(tradesLeft - 1, winsLeft)]
-      // But more accurate with backward recursion. For practical web use:
-      let C1 = binomial(tradesLeft - 1, winsLeft - 1);
-      let C2 = binomial(tradesLeft - 1, winsLeft);
-      let denom = payout * C1 + C2;
-      if (denom === 0) denom = 1;
-      return riskLeft / denom;
+      return +(guess).toFixed(2);
     }
 
     function getNextStake() {
       let tradesLeft = tradesPerCycle - (wins + losses);
       let winsLeft = targetWins - wins;
       if (winsLeft <= 0 || tradesLeft <= 0) return 0;
-      // Amount to recover (risked capital - profit so far)
       let amountToRecover = riskAmount - profitSoFar;
-      let stake = masanielloNextStake(amountToRecover, tradesLeft, winsLeft, payout);
+      let stake = recursiveStake(amountToRecover, tradesLeft, winsLeft, payout);
       return Math.max(0, +stake.toFixed(2));
     }
 
@@ -125,7 +122,6 @@
       }
       tradeNumber++;
       if (wins >= targetWins || (wins + losses) >= tradesPerCycle) {
-        // End of cycle
         totalBalance += profitSoFar;
         if (wins >= targetWins) {
           cycleWins++;
