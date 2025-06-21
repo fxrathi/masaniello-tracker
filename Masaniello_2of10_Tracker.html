@@ -1,0 +1,111 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Masaniello 2-of-10 Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; text-align: center; }
+    input, button { font-size: 18px; padding: 10px; margin: 8px; width: 80%; max-width: 300px; }
+    .win { background-color: #4CAF50; color: white; }
+    .loss { background-color: #f44336; color: white; }
+    .stats { margin-top: 20px; font-size: 16px; }
+    .highlight { font-weight: bold; font-size: 18px; }
+  </style>
+</head>
+<body>
+  <h2>Masaniello 2-of-10 Tracker</h2>
+
+  <input type="number" id="balance" placeholder="Enter Initial Balance" />
+  <div>
+    <button class="win" onclick="registerResult(true)">✅ WIN</button>
+    <button class="loss" onclick="registerResult(false)">❌ LOSS</button>
+  </div>
+
+  <div class="stats" id="status"></div>
+
+  <script>
+    let cycle = 1;
+    let wins = 0;
+    let losses = 0;
+    let tradeCount = 0;
+    let cycleWins = 0;
+    let betAmounts = [];
+    const totalTrades = 10;
+    const targetWins = 2;
+    const payout = 1.85;
+
+    const statusDiv = document.getElementById('status');
+    const balanceInput = document.getElementById('balance');
+
+    function generateMasanielloSequence(balance, payout) {
+      const totalLossRisk = balance * 0.4;
+      let base = totalLossRisk / 6;
+      return [base, base * 1.2, base * 1.4, base * 1.6, base * 2, base * 2.4, base * 2.8, base * 3.2, base * 3.6, base * 4];
+    }
+
+    function getNextBet() {
+      if (tradeCount >= totalTrades || wins >= targetWins) return 0;
+      return betAmounts[tradeCount].toFixed(2);
+    }
+
+    function registerResult(isWin) {
+      const balance = parseFloat(balanceInput.value);
+      if (isNaN(balance) || balance <= 0) {
+        alert("Please enter a valid initial balance.");
+        return;
+      }
+
+      if (tradeCount === 0) {
+        betAmounts = generateMasanielloSequence(balance, payout);
+      }
+
+      let bet = parseFloat(betAmounts[tradeCount]);
+      if (isWin) {
+        wins++;
+      } else {
+        losses++;
+      }
+      tradeCount++;
+
+      if (wins >= targetWins || tradeCount >= totalTrades) {
+        let profit = 0;
+        for (let i = 0; i < tradeCount; i++) {
+          profit -= betAmounts[i];
+        }
+        profit += wins * bet * payout;
+        let newBalance = balance + profit;
+        balanceInput.value = newBalance.toFixed(2);
+
+        if (wins >= targetWins) {
+          cycleWins++;
+          alert("🎯 Cycle WON! Profit added.");
+        } else {
+          alert("❌ Cycle FAILED. Loss deducted.");
+        }
+
+        cycle++;
+        wins = 0;
+        losses = 0;
+        tradeCount = 0;
+      }
+
+      updateStats();
+    }
+
+    function updateStats() {
+      statusDiv.innerHTML = `
+        <div class="highlight">Cycle #${cycle}</div>
+        Wins: ${wins} / ${targetWins}<br>
+        Losses: ${losses} / ${totalTrades - targetWins}<br>
+        Trade #: ${tradeCount + 1} / ${totalTrades}<br>
+        📈 Next Bet: $${getNextBet()}<br>
+        🥇 Total Cycles Won: ${cycleWins}
+      `;
+    }
+
+    updateStats();
+  </script>
+</body>
+</html>
