@@ -2,124 +2,165 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Masaniello 2-of-10 Tracker</title>
+  <title>Masaniello 2/10 Tracker (Dynamic)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; text-align: center; }
-    input, button { font-size: 18px; padding: 10px; margin: 8px; width: 80%; max-width: 300px; }
-    .win { background-color: #4CAF50; color: white; }
-    .loss { background-color: #f44336; color: white; }
-    .reset { background-color: #777; color: white; }
-    .stats { margin-top: 20px; font-size: 16px; }
-    .highlight { font-weight: bold; font-size: 18px; }
+    body { font-family: Arial, sans-serif; padding: 16px; text-align: center; }
+    .flex { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .stat { font-size: 18px; margin: 8px 0; }
+    .btn { font-size: 28px; padding: 20px 36px; border: none; border-radius: 8px; margin: 8px; width: 120px;}
+    .win { background: #37c84a; color: white;}
+    .loss { background: #f44336; color: white;}
+    .reset { background: #555; color: white; font-size: 18px;}
+    input[type=number] { font-size: 18px; padding: 6px; width: 100px; }
+    label { font-size: 16px; }
+    .inputs { margin-bottom: 12px; }
   </style>
 </head>
 <body>
-  <h2>Masaniello 2-of-10 Tracker</h2>
-
-  <input type="number" id="balance" placeholder="Enter Initial Balance" />
-  <div>
-    <button class="win" onclick="registerResult(true)">✅ WIN</button>
-    <button class="loss" onclick="registerResult(false)">❌ LOSS</button>
-    <button class="reset" onclick="resetTracker()">🔄 RESET</button>
+  <h2>Masaniello 2/10 (Objective:WIN logic)</h2>
+  <div class="inputs flex">
+    <div>
+      <label>Starting Balance: $</label>
+      <input id="balance" type="number" min="1" step="0.01" value="500">
+    </div>
+    <div>
+      <label>% Risk Per Cycle: </label>
+      <input id="riskPct" type="number" min="1" max="100" step="1" value="20">
+      <span>%</span>
+    </div>
+    <button class="reset" onclick="resetAll(true)">Apply Settings</button>
   </div>
-
-  <div class="stats" id="status"></div>
+  <div class="stat" id="cycleStat"></div>
+  <div class="flex">
+    <button class="btn win" onclick="processResult(true)">✅ WIN</button>
+    <button class="btn loss" onclick="processResult(false)">❌ LOSS</button>
+  </div>
+  <div class="stat" id="status"></div>
+  <button class="reset" onclick="resetAll(false)">🔄 RESET TRACKER</button>
 
   <script>
-    let cycle = 1;
-    let wins = 0;
-    let losses = 0;
-    let tradeCount = 0;
-    let cycleWins = 0;
-    let betAmounts = [];
-    const totalTrades = 10;
+    // --- CONFIG ---
+    const tradesPerCycle = 10;
     const targetWins = 2;
     const payout = 1.85;
 
-    const statusDiv = document.getElementById('status');
-    const balanceInput = document.getElementById('balance');
+    // --- STATE ---
+    let totalBalance = 500;
+    let riskPct = 20;
+    let cycle = 1;
+    let wins = 0;
+    let losses = 0;
+    let tradeNumber = 1;
+    let cycleWins = 0;
+    let cycleProfit = 0;
+    let riskAmount = 100;
+    let stakes = [];
 
-    function generateMasanielloSequence(balance, payout) {
-      const totalLossRisk = balance * 0.4;
-      let base = totalLossRisk / 6;
-      return [base, base * 1.2, base * 1.4, base * 1.6, base * 2, base * 2.4, base * 2.8, base * 3.2, base * 3.6, base * 4];
+    // --- MASANIELLO LOGIC ---
+    function binomial(n, k) {
+      // n choose k
+      if (k < 0 || k > n) return 0;
+      let res = 1;
+      for (let i = 1; i <= k; i++) {
+        res *= (n - (k - i));
+        res /= i;
+      }
+      return res;
     }
 
-    function getNextBet() {
-      if (tradeCount >= totalTrades || wins >= targetWins) return 0;
-      return betAmounts[tradeCount].toFixed(2);
+    function nextStake(remainingTrades, remainingWins, currentProfit) {
+      if (remainingWins === 0) return 0; // already reached target
+      // Masaniello logic: dynamically solve for next stake
+      // S = (riskAmount + abs(currentProfit)) / (binomial(remainingTrades, remainingWins) * payout)
+      // This is a simplification for 2-wins-in-10. For production, use recursion or a table.
+      let combos = binomial(remainingTrades, remainingWins);
+      if (combos === 0) combos = 1;
+      let stake = (riskAmount - currentProfit) / (combos * payout);
+      return Math.max(0, +stake.toFixed(2));
     }
 
-    function registerResult(isWin) {
-      const balance = parseFloat(balanceInput.value);
-      if (isNaN(balance) || balance <= 0) {
-        alert("Please enter a valid initial balance.");
-        return;
-      }
-
-      if (tradeCount === 0) {
-        betAmounts = generateMasanielloSequence(balance, payout);
-      }
-
-      let bet = parseFloat(betAmounts[tradeCount]);
-      if (isWin) {
-        wins++;
-      } else {
-        losses++;
-      }
-      tradeCount++;
-
-      if (wins >= targetWins || tradeCount >= totalTrades) {
-        let profit = 0;
-        for (let i = 0; i < tradeCount; i++) {
-          profit -= betAmounts[i];
-        }
-        profit += wins * bet * payout;
-        let newBalance = balance + profit;
-        balanceInput.value = newBalance.toFixed(2);
-
-        if (wins >= targetWins) {
-          cycleWins++;
-          alert("🎯 Cycle WON! Profit added.");
-        } else {
-          alert("❌ Cycle FAILED. Loss deducted.");
-        }
-
-        cycle++;
-        resetCycle();
-      }
-
-      updateStats();
+    function getNextStake() {
+      // How many trades left? How many wins needed?
+      let tradesLeft = tradesPerCycle - (wins + losses);
+      let winsLeft = targetWins - wins;
+      let profitSoFar = cycleProfit;
+      if (winsLeft <= 0 || tradesLeft <= 0) return 0;
+      return nextStake(tradesLeft, winsLeft, profitSoFar);
     }
 
-    function resetCycle() {
-      wins = 0;
-      losses = 0;
-      tradeCount = 0;
-    }
-
-    function resetTracker() {
-      if (confirm("Reset all stats and start over?")) {
-        cycle = 1;
-        cycleWins = 0;
-        resetCycle();
-        updateStats();
-      }
-    }
-
-    function updateStats() {
-      statusDiv.innerHTML = `
-        <div class="highlight">Cycle #${cycle}</div>
-        Wins: ${wins} / ${targetWins}<br>
-        Losses: ${losses} / ${totalTrades - targetWins}<br>
-        Trade #: ${tradeCount + 1} / ${totalTrades}<br>
-        📈 Next Bet: $${getNextBet()}<br>
-        🥇 Total Cycles Won: ${cycleWins}
+    // --- APP LOGIC ---
+    function updateDisplay() {
+      document.getElementById('cycleStat').innerHTML = `
+        <b>Cycle #${cycle}</b> &nbsp;|&nbsp; 
+        <b>Cycle Wins:</b> ${cycleWins} &nbsp;|&nbsp;
+        <b>Balance:</b> $${totalBalance.toFixed(2)}
+      `;
+      document.getElementById('status').innerHTML = `
+        <b>Trade:</b> ${tradeNumber} / ${tradesPerCycle} &nbsp;|&nbsp;
+        <b>Wins:</b> ${wins} &nbsp;|&nbsp;
+        <b>Losses:</b> ${losses} <br>
+        <b>Next Bet:</b> $${getNextStake()}
       `;
     }
 
-    updateStats();
+    function processResult(isWin) {
+      if (wins >= targetWins || (wins + losses) >= tradesPerCycle) {
+        alert('Cycle is over. Please reset for a new cycle.');
+        return;
+      }
+      let stake = getNextStake();
+      if (isWin) {
+        wins++;
+        cycleProfit += stake * (payout - 1); // Net profit from this win
+      } else {
+        losses++;
+        cycleProfit -= stake;
+      }
+      tradeNumber++;
+      if (wins >= targetWins || (wins + losses) >= tradesPerCycle) {
+        // End of cycle
+        totalBalance += cycleProfit;
+        if (wins >= targetWins) {
+          cycleWins++;
+          alert(`🎉 Cycle WON! Profit: $${cycleProfit.toFixed(2)} added.`);
+        } else {
+          alert(`Cycle ended. Not enough wins. P/L: $${cycleProfit.toFixed(2)}.`);
+        }
+        resetCycleOnly();
+      }
+      updateDisplay();
+    }
+
+    function resetCycleOnly() {
+      cycle++;
+      wins = 0;
+      losses = 0;
+      tradeNumber = 1;
+      cycleProfit = 0;
+      riskAmount = totalBalance * (riskPct / 100);
+    }
+
+    function resetAll(applyNewSettings) {
+      // If "Apply Settings" was clicked, update values from inputs
+      if (applyNewSettings) {
+        let bal = parseFloat(document.getElementById('balance').value);
+        let pct = parseFloat(document.getElementById('riskPct').value);
+        if (isNaN(bal) || bal <= 0 || isNaN(pct) || pct <= 0 || pct > 100) {
+          alert('Please enter valid starting balance and % risk.');
+          return;
+        }
+        totalBalance = bal;
+        riskPct = pct;
+      }
+      cycle = 1;
+      cycleWins = 0;
+      resetCycleOnly();
+      updateDisplay();
+    }
+
+    // --- INIT ---
+    resetAll(true);
   </script>
 </body>
 </html>
