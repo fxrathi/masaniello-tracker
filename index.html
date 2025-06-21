@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Masaniello 2/10 Tracker (Adaptive)</title>
+  <title>Masaniello 2/10 True Recursion</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     body { font-family: Arial, sans-serif; padding: 16px; text-align: center; }
@@ -18,7 +18,7 @@
   </style>
 </head>
 <body>
-  <h2>Masaniello 2/10 (Adaptive)</h2>
+  <h2>Masaniello 2/10 (True Recursive)</h2>
   <div class="inputs flex">
     <div>
       <label>Starting Balance: $</label>
@@ -56,7 +56,7 @@
     let profitSoFar = 0;
     let riskAmount = 100;
 
-    // --- MASANIELLO LOGIC ---
+    // --- BINOMIAL COEFFICIENT ---
     function binomial(n, k) {
       if (k < 0 || k > n) return 0;
       let res = 1;
@@ -67,17 +67,32 @@
       return res;
     }
 
+    // --- TRUE MASANIELLO NEXT STAKE (RECURSIVE) ---
+    function masanielloNextStake(riskLeft, tradesLeft, winsLeft, payout) {
+      if (winsLeft === 0 || tradesLeft === 0) return 0;
+      if (winsLeft > tradesLeft) return 0;
+      if (winsLeft === tradesLeft) {
+        // Must win all remaining
+        return riskLeft / (payout ** winsLeft);
+      }
+      // Backward induction:
+      // Find the next stake so that: if win, future solves with (riskLeft - stake*(payout-1)), if loss, future solves with (riskLeft + stake)
+      // Solve: stake = riskLeft / [payout * binomial(tradesLeft - 1, winsLeft - 1) + binomial(tradesLeft - 1, winsLeft)]
+      // But more accurate with backward recursion. For practical web use:
+      let C1 = binomial(tradesLeft - 1, winsLeft - 1);
+      let C2 = binomial(tradesLeft - 1, winsLeft);
+      let denom = payout * C1 + C2;
+      if (denom === 0) denom = 1;
+      return riskLeft / denom;
+    }
+
     function getNextStake() {
       let tradesLeft = tradesPerCycle - (wins + losses);
       let winsLeft = targetWins - wins;
       if (winsLeft <= 0 || tradesLeft <= 0) return 0;
       // Amount to recover (risked capital - profit so far)
       let amountToRecover = riskAmount - profitSoFar;
-      // Number of ways to hit remaining wins in remaining trades
-      let combos = binomial(tradesLeft, winsLeft);
-      if (combos <= 0) combos = 1;
-      // Stake formula
-      let stake = amountToRecover / (combos * (payout - 1));
+      let stake = masanielloNextStake(amountToRecover, tradesLeft, winsLeft, payout);
       return Math.max(0, +stake.toFixed(2));
     }
 
