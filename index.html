@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Masaniello 2/10 Tracker (Dynamic)</title>
+  <title>Masaniello 2/10 Tracker (Adaptive)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     body { font-family: Arial, sans-serif; padding: 16px; text-align: center; }
@@ -18,7 +18,7 @@
   </style>
 </head>
 <body>
-  <h2>Masaniello 2/10 (Objective:WIN logic)</h2>
+  <h2>Masaniello 2/10 (Adaptive)</h2>
   <div class="inputs flex">
     <div>
       <label>Starting Balance: $</label>
@@ -53,13 +53,11 @@
     let losses = 0;
     let tradeNumber = 1;
     let cycleWins = 0;
-    let cycleProfit = 0;
+    let profitSoFar = 0;
     let riskAmount = 100;
-    let stakes = [];
 
     // --- MASANIELLO LOGIC ---
     function binomial(n, k) {
-      // n choose k
       if (k < 0 || k > n) return 0;
       let res = 1;
       for (let i = 1; i <= k; i++) {
@@ -69,27 +67,20 @@
       return res;
     }
 
-    function nextStake(remainingTrades, remainingWins, currentProfit) {
-      if (remainingWins === 0) return 0; // already reached target
-      // Masaniello logic: dynamically solve for next stake
-      // S = (riskAmount + abs(currentProfit)) / (binomial(remainingTrades, remainingWins) * payout)
-      // This is a simplification for 2-wins-in-10. For production, use recursion or a table.
-      let combos = binomial(remainingTrades, remainingWins);
-      if (combos === 0) combos = 1;
-      let stake = (riskAmount - currentProfit) / (combos * payout);
+    function getNextStake() {
+      let tradesLeft = tradesPerCycle - (wins + losses);
+      let winsLeft = targetWins - wins;
+      if (winsLeft <= 0 || tradesLeft <= 0) return 0;
+      // Amount to recover (risked capital - profit so far)
+      let amountToRecover = riskAmount - profitSoFar;
+      // Number of ways to hit remaining wins in remaining trades
+      let combos = binomial(tradesLeft, winsLeft);
+      if (combos <= 0) combos = 1;
+      // Stake formula
+      let stake = amountToRecover / (combos * (payout - 1));
       return Math.max(0, +stake.toFixed(2));
     }
 
-    function getNextStake() {
-      // How many trades left? How many wins needed?
-      let tradesLeft = tradesPerCycle - (wins + losses);
-      let winsLeft = targetWins - wins;
-      let profitSoFar = cycleProfit;
-      if (winsLeft <= 0 || tradesLeft <= 0) return 0;
-      return nextStake(tradesLeft, winsLeft, profitSoFar);
-    }
-
-    // --- APP LOGIC ---
     function updateDisplay() {
       document.getElementById('cycleStat').innerHTML = `
         <b>Cycle #${cycle}</b> &nbsp;|&nbsp; 
@@ -112,20 +103,20 @@
       let stake = getNextStake();
       if (isWin) {
         wins++;
-        cycleProfit += stake * (payout - 1); // Net profit from this win
+        profitSoFar += stake * (payout - 1);
       } else {
         losses++;
-        cycleProfit -= stake;
+        profitSoFar -= stake;
       }
       tradeNumber++;
       if (wins >= targetWins || (wins + losses) >= tradesPerCycle) {
         // End of cycle
-        totalBalance += cycleProfit;
+        totalBalance += profitSoFar;
         if (wins >= targetWins) {
           cycleWins++;
-          alert(`🎉 Cycle WON! Profit: $${cycleProfit.toFixed(2)} added.`);
+          alert(`🎉 Cycle WON! Profit: $${profitSoFar.toFixed(2)} added.`);
         } else {
-          alert(`Cycle ended. Not enough wins. P/L: $${cycleProfit.toFixed(2)}.`);
+          alert(`Cycle ended. Not enough wins. P/L: $${profitSoFar.toFixed(2)}.`);
         }
         resetCycleOnly();
       }
@@ -137,12 +128,11 @@
       wins = 0;
       losses = 0;
       tradeNumber = 1;
-      cycleProfit = 0;
+      profitSoFar = 0;
       riskAmount = totalBalance * (riskPct / 100);
     }
 
     function resetAll(applyNewSettings) {
-      // If "Apply Settings" was clicked, update values from inputs
       if (applyNewSettings) {
         let bal = parseFloat(document.getElementById('balance').value);
         let pct = parseFloat(document.getElementById('riskPct').value);
