@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,6 +9,7 @@
     input, button { font-size: 18px; padding: 10px; margin: 8px; width: 80%; max-width: 300px; }
     .win { background-color: #4CAF50; color: white; }
     .loss { background-color: #f44336; color: white; }
+    .reset { background-color: #777; color: white; }
     .stats { margin-top: 20px; font-size: 16px; }
     .highlight { font-weight: bold; font-size: 18px; }
   </style>
@@ -21,6 +21,7 @@
   <div>
     <button class="win" onclick="registerResult(true)">✅ WIN</button>
     <button class="loss" onclick="registerResult(false)">❌ LOSS</button>
+    <button class="reset" onclick="resetTracker()">🔄 RESET</button>
   </div>
 
   <div class="stats" id="status"></div>
@@ -86,12 +87,25 @@
         }
 
         cycle++;
-        wins = 0;
-        losses = 0;
-        tradeCount = 0;
+        resetCycle();
       }
 
       updateStats();
+    }
+
+    function resetCycle() {
+      wins = 0;
+      losses = 0;
+      tradeCount = 0;
+    }
+
+    function resetTracker() {
+      if (confirm("Reset all stats and start over?")) {
+        cycle = 1;
+        cycleWins = 0;
+        resetCycle();
+        updateStats();
+      }
     }
 
     function updateStats() {
